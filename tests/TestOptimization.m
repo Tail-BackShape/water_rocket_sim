@@ -1,5 +1,5 @@
 classdef TestOptimization < matlab.unittest.TestCase
-    %TESTOPTIMIZATION Unit tests for wr.evaluateCandidate and wr.optimizeRocket
+    %TESTOPTIMIZATION wr.evaluateCandidate と wr.optimizeRocket の単体テスト
 
     methods (TestClassSetup)
         function addProjectRootToPath(testCase) %#ok<MANU>
@@ -68,7 +68,7 @@ classdef TestOptimization < matlab.unittest.TestCase
             cfg.Amin = 0.0;
             cfgSI = wr.validateConfig(cfg);
 
-            % Closed nozzle candidate -> cannot lift off, must return finite penalty > 0 (never NaN)
+            % ノズル全閉候補が NaN ではなく正のペナルティ値を返すことを確認
             qClosed = [0.35, zeros(1, cfgSI.nControlKnots)];
             [costClosed, simClosed] = wr.evaluateCandidate(qClosed, cfgSI);
             testCase.verifyFalse(isnan(costClosed));
@@ -130,7 +130,7 @@ classdef TestOptimization < matlab.unittest.TestCase
 
         function testNoPercentWhenBaselineZero(testCase)
             cfg = fastOptConfig();
-            cfg.pGauge = 200; % Too low to lift off -> baseline Hmax == 0
+            cfg.pGauge = 200; % 離陸不能な低圧で基準高度がゼロのケース
             cfg.p0Abs = [];
             cfgSI = wr.validateConfig(cfg);
             res = wr.optimizeRocket(cfgSI);

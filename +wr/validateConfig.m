@@ -1,8 +1,6 @@
 function cfgSI = validateConfig(cfg)
-%VALIDATECONFIG Validate configuration and convert user units into SI units.
-%   cfgSI = wr.validateConfig(cfg) checks required fields, converts any user
-%   display units (L, mm, deg, kPa gauge) into SI units, and enforces physical
-%   and numerical bounds. Throws 'wr:invalidConfig' on invalid inputs.
+%VALIDATECONFIG 設定構造体を検証し、ユーザー表示単位をSI単位へ変換する
+%   不正な設定値がある場合は 'wr:invalidConfig' エラーを送出する。
 
     if nargin < 1 || ~isstruct(cfg) || numel(cfg) ~= 1
         error('wr:invalidConfig', 'Configuration must be a scalar struct.');
@@ -10,26 +8,22 @@ function cfgSI = validateConfig(cfg)
 
     cfgSI = cfg;
 
-    % --- 1. Convert user-unit fields if SI fields are empty ---
-    % Tank volume Vb [m^3]
+    % --- 1. SIフィールドが空の場合にユーザー表示単位から換算 ---
     if (~isfield(cfgSI, 'Vb') || isempty(cfgSI.Vb)) && isfield(cfgSI, 'Vb_L') && ~isempty(cfgSI.Vb_L)
         validateScalarPositive(cfgSI.Vb_L, 'Vb_L');
         cfgSI.Vb = cfgSI.Vb_L * 1e-3;
     end
 
-    % Body diameter D [m]
     if (~isfield(cfgSI, 'D') || isempty(cfgSI.D)) && isfield(cfgSI, 'D_mm') && ~isempty(cfgSI.D_mm)
         validateScalarPositive(cfgSI.D_mm, 'D_mm');
         cfgSI.D = cfgSI.D_mm * 1e-3;
     end
 
-    % Launch angle theta0 [rad]
     if (~isfield(cfgSI, 'theta0') || isempty(cfgSI.theta0)) && isfield(cfgSI, 'theta0_deg') && ~isempty(cfgSI.theta0_deg)
         validateScalarReal(cfgSI.theta0_deg, 'theta0_deg');
         cfgSI.theta0 = deg2rad(cfgSI.theta0_deg);
     end
 
-    % Nozzle diameter bounds dMin_mm, dMax_mm -> Amin, Amax [m^2]
     if (~isfield(cfgSI, 'Amin') || isempty(cfgSI.Amin)) && isfield(cfgSI, 'dMin_mm') && ~isempty(cfgSI.dMin_mm)
         validateScalarNonnegative(cfgSI.dMin_mm, 'dMin_mm');
         cfgSI.Amin = pi * (cfgSI.dMin_mm * 1e-3 / 2)^2;
@@ -39,7 +33,7 @@ function cfgSI = validateConfig(cfg)
         cfgSI.Amax = pi * (cfgSI.dMax_mm * 1e-3 / 2)^2;
     end
 
-    % --- 2. Validate ambient pressure first, then initial tank pressure ---
+    % --- 2. 外気圧と初期タンク圧力の検証・換算 ---
     requireField(cfgSI, 'pAmb');
     validateScalarPositive(cfgSI.pAmb, 'pAmb');
 
@@ -75,7 +69,7 @@ function cfgSI = validateConfig(cfg)
             cfgSI.p0Abs, cfgSI.pAmb);
     end
 
-    % --- 3. Validate required physical and geometric parameters ---
+    % --- 3. 機体・環境物性パラメータの検証 ---
     requireField(cfgSI, 'Vb');
     validateScalarPositive(cfgSI.Vb, 'Vb');
 
@@ -115,7 +109,7 @@ function cfgSI = validateConfig(cfg)
     requireField(cfgSI, 'g');
     validateScalarPositive(cfgSI.g, 'g');
 
-    % --- 4. Validate nozzle and control parameters ---
+    % --- 4. ノズル・制御パラメータの検証 ---
     requireField(cfgSI, 'Amin');
     validateScalarNonnegative(cfgSI.Amin, 'Amin');
 
@@ -146,7 +140,7 @@ function cfgSI = validateConfig(cfg)
         error('wr:invalidConfig', 'Water fill fraction bounds must satisfy 0 < fillMin < fillMax < 1.');
     end
 
-    % --- 5. Validate numerical solver parameters ---
+    % --- 5. 数値積分ソルバ設定の検証 ---
     requireField(cfgSI, 'vEpsilon');
     validateScalarPositive(cfgSI.vEpsilon, 'vEpsilon');
 
@@ -170,7 +164,7 @@ function cfgSI = validateConfig(cfg)
         error('wr:invalidConfig', 'maxFlightTime must be greater than tControlEnd.');
     end
 
-    % Precompute convenience quantities
+    % 補助量の事前計算
     cfgSI.tKnots = linspace(0, cfgSI.tControlEnd, cfgSI.nControlKnots);
     cfgSI.bodyArea = pi * (cfgSI.D^2) / 4;
 end

@@ -1,16 +1,14 @@
 function prop = waterPropulsion(t, y, alpha, cfgSI)
-%WATERPROPULSION Compute thermodynamic state, mass flow, and thrust in Phase W.
-%   prop = wr.waterPropulsion(t, y, alpha, cfgSI) evaluates the adiabatic
-%   ideal-gas expansion of trapped air and Bernoulli water discharge at time t
-%   for state vector y = [x; z; vx; vz; Vw; ma].
+%WATERPROPULSION 水噴射フェーズ (Phase W) の状態量・流量・推力を計算する
+%   状態ベクトル y = [x; z; vx; vz; Vw; ma] に対し、空気の断熱膨張と
+%   ベルヌーイ式による水噴射モデルを評価する。
 
-    % Clamp water volume within physical tank bounds to guard against tiny ODE
-    % step overshoots while event detection locates Vw == 0
+    % イベント検出までの微小なステップはみ出しを物理範囲内にクランプ
     VwRaw = y(5);
     Vw = min(max(VwRaw, 0.0), cfgSI.Vb * (1.0 - 1e-12));
     ma = max(y(6), 0.0);
 
-    % Initial trapped air volume recovered from constant air mass ma = ma0
+    % 一定空気質量 ma = ma0 から初期空気体積 Va0 を復元
     Va0 = ma * cfgSI.Rair * cfgSI.T0 / cfgSI.p0Abs;
     Va = max(cfgSI.Vb - Vw, 1e-15);
 

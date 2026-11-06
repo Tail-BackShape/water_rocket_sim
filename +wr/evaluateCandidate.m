@@ -1,10 +1,6 @@
 function [cost, sim] = evaluateCandidate(q, cfgSI)
-%EVALUATECANDIDATE Evaluate direct single-shooting objective J(q) = -Hmax(q).
-%   [cost, sim] = wr.evaluateCandidate(q, cfgSI) simulates a candidate
-%   decision vector q = [f, alpha_1, ..., alpha_N]. If flight succeeds and
-%   reaches a valid positive apex, cost = -sim.Hmax. Otherwise returns a
-%   finite positive penalty cost (never NaN) and retains diagnostic status
-%   in sim.
+%EVALUATECANDIDATE 決定変数 q = [f, alpha_1, ..., alpha_N] の目的関数 J = -Hmax を評価する
+%   飛行成功時は cost = -sim.Hmax、飛行不能・失敗時は正の有限ペナルティ値を返す。
 
     expectedLen = 1 + cfgSI.nControlKnots;
     if ~isnumeric(q) || numel(q) ~= expectedLen || any(~isfinite(q(:)))
@@ -24,7 +20,7 @@ function [cost, sim] = evaluateCandidate(q, cfgSI)
     if string(sim.status) == "success" && isfinite(sim.Hmax) && sim.Hmax > 0.0
         cost = -sim.Hmax;
     else
-        % Finite penalty > 0 so invalid/non-liftoff candidates are never chosen
+        % 無効・離陸不能な候補が採用されないよう正の有限ペナルティを返す
         partialZ = 0.0;
         if ~isempty(sim.z) && all(isfinite(sim.z))
             partialZ = max(sim.z);

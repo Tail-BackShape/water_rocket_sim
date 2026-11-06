@@ -1,5 +1,5 @@
 classdef TestNozzle < matlab.unittest.TestCase
-    %TESTNOZZLE Unit tests for wr.openingAtTime and nozzle slew/range properties
+    %TESTNOZZLE wr.openingAtTime とノズル開度補間・変化速度制約の単体テスト
 
     methods (TestClassSetup)
         function addProjectRootToPath(testCase) %#ok<MANU>
@@ -58,7 +58,7 @@ classdef TestNozzle < matlab.unittest.TestCase
             dt = tKnots(2) - tKnots(1);
             dAlphaMax = cfgSI.ARateMax * dt / (cfgSI.Amax - cfgSI.Amin);
 
-            % Construct a valid schedule right at the slew rate limit
+            % 最大変化速度ちょうどで推移する実行可能スケジュールを生成
             alpha = zeros(1, cfgSI.nControlKnots);
             alpha(1) = 0.1;
             for k = 2:cfgSI.nControlKnots
@@ -73,7 +73,7 @@ classdef TestNozzle < matlab.unittest.TestCase
             knotRates = abs(diff(AKnots)) ./ diff(tKnots);
             testCase.verifyLessThanOrEqual(knotRates, cfgSI.ARateMax + 1e-12);
 
-            % Also verify on a fine time grid including post-control hold
+            % 細密な時間グリッドでも変化速度上限を満たすことを確認
             tFine = linspace(0, cfgSI.tControlEnd * 1.5, 300);
             [AFine, ~] = wr.openingAtTime(tFine, alpha, cfgSI);
             fineRates = abs(diff(AFine)) ./ diff(tFine);

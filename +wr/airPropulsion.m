@@ -1,9 +1,7 @@
 function prop = airPropulsion(t, y, alpha, cfgSI, phase0)
-%AIRPROPULSION Compute thermodynamic state, mass flow, and thrust in Phase A.
-%   prop = wr.airPropulsion(t, y, alpha, cfgSI, phase0) evaluates adiabatic
-%   rigid-tank blowdown and isentropic nozzle flow (choked or unchoked) at
-%   time t for state vector y = [x; z; vx; vz; Vw; ma] and Phase A initial
-%   gas state phase0 = struct('p1', ..., 'T1', ..., 'ma1', ...).
+%AIRPROPULSION 空気噴射フェーズ (Phase A) の状態量・流量・推力を計算する
+%   開始状態 phase0 (p1, T1, ma1) に基づき、剛体タンクからの断熱ブローダウンと
+%   等エントロピーノズル流出 (チョーク / 非チョーク) を評価する。
 
     if nargin < 5 || ~isstruct(phase0)
         error('wr:invalidPhase0', 'Phase A requires phase0 struct with fields p1, T1, ma1.');
@@ -31,7 +29,7 @@ function prop = airPropulsion(t, y, alpha, cfgSI, phase0)
         ue = 0.0;
         thrust = 0.0;
     elseif r <= rCrit
-        % Choked flow at throat
+        % チョーク流れ
         isChoked = true;
         chokeFactor = (2.0 / (g + 1.0)) ^ ((g + 1.0) / (2.0 * (g - 1.0)));
         mDotOut = A * p * sqrt(g / (cfgSI.Rair * T)) * chokeFactor;
@@ -40,11 +38,10 @@ function prop = airPropulsion(t, y, alpha, cfgSI, phase0)
         ue = sqrt(g * cfgSI.Rair * Te);
         thrust = mDotOut * ue + (pe - cfgSI.pAmb) * A;
     else
-        % Unchoked subsonic flow
+        % 非チョーク亜音速流れ
         isChoked = false;
         radFlow = (2.0 / (g - 1.0)) * (r^(2.0 / g) - r^((g + 1.0) / g));
-        % Guard against tiny negative roundoff very close to r == 1
-        radFlow = max(radFlow, 0.0);
+        radFlow = max(radFlow, 0.0); % r=1 近傍の丸め誤差保護
         mDotOut = A * p * sqrt(g / (cfgSI.Rair * T)) * sqrt(radFlow);
         pe = cfgSI.pAmb;
         radVel = (2.0 * g * cfgSI.Rair * T / (g - 1.0)) * (1.0 - r^((g - 1.0) / g));

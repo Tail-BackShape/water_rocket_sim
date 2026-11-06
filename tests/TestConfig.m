@@ -1,5 +1,5 @@
 classdef TestConfig < matlab.unittest.TestCase
-    %TESTCONFIG Unit tests for wr.defaultConfig and wr.validateConfig
+    %TESTCONFIG wr.defaultConfig と wr.validateConfig の単体テスト
 
     methods (TestClassSetup)
         function addProjectRootToPath(testCase) %#ok<MANU>

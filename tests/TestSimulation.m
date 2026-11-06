@@ -1,5 +1,5 @@
 classdef TestSimulation < matlab.unittest.TestCase
-    %TESTSIMULATION Unit tests for wr.rocketEvents and wr.simulateRocket
+    %TESTSIMULATION wr.rocketEvents と wr.simulateRocket の単体テスト
 
     methods (TestClassSetup)
         function addProjectRootToPath(testCase) %#ok<MANU>
@@ -18,23 +18,22 @@ classdef TestSimulation < matlab.unittest.TestCase
             testCase.verifyEqual(string(sim.status), "success");
             testCase.verifyEqual(string(sim.phaseEvents.waterEnd.reason), "waterDepleted");
 
-            % Strict monotonicity of time vector (no duplicate boundary points)
+            % 時刻ベクトルの単調増加を確認 (境界の重複登録なし)
             testCase.verifyTrue(all(diff(sim.t) > 0));
 
-            % Locate Phase W -> Phase A transition index
+            % Phase W -> Phase A の境界インデックス特定
             idxWEnd = find(sim.phaseId == 1, 1, 'last');
             idxAStart = find(sim.phaseId == 2, 1, 'first');
             testCase.verifyNotEmpty(idxWEnd);
             testCase.verifyNotEmpty(idxAStart);
             testCase.verifyEqual(idxAStart, idxWEnd + 1);
 
-            % Check state continuity across the boundary step
             dtBoundary = sim.t(idxAStart) - sim.t(idxWEnd);
             testCase.verifyLessThan(dtBoundary, 0.05);
             testCase.verifyEqual(sim.Vw(idxAStart), 0.0, 'AbsTol', 1e-12);
             testCase.verifyGreaterThan(sim.p(idxWEnd), cfgSI.pAmb);
 
-            % Exact continuity at the stored event state
+            % フェーズ切替イベント状態での位置・速度・質量の連続性確認
             yWEnd = sim.phaseEvents.waterEnd.yEnd;
             yAStart = sim.phaseEvents.airStart.yStart;
             testCase.verifyEqual(yAStart(1:4), yWEnd(1:4), 'AbsTol', 1e-12);
@@ -52,7 +51,8 @@ classdef TestSimulation < matlab.unittest.TestCase
             cfg.fillMax = 0.85;
             cfgSI = wr.validateConfig(cfg);
 
-            f = 0.75; % High fill fraction so air pressure reaches pAmb before water empties
+            % 水が残ったまま内圧が外気圧に達する高充填率条件
+            f = 0.75;
             alpha = 0.9 * ones(1, cfgSI.nControlKnots);
 
             sim = wr.simulateRocket(f, alpha, cfgSI);
@@ -77,7 +77,7 @@ classdef TestSimulation < matlab.unittest.TestCase
         end
 
         function testNoLiftoffIsNotSuccess(testCase)
-            % Case 1: Initial pressure equal to ambient (bypassing validateConfig)
+            % ケース1: 初圧が外気圧と等しい場合
             cfgSI = wr.validateConfig(wr.defaultConfig());
             cfgSI.p0Abs = cfgSI.pAmb;
             cfgSI.pGauge = 0.0;
@@ -86,9 +86,9 @@ classdef TestSimulation < matlab.unittest.TestCase
             testCase.verifyNotEqual(string(sim1.status), "success");
             testCase.verifyEqual(string(sim1.status), "noLiftoff");
 
-            % Case 2: Positive gauge pressure but thrust < gravity (cannot lift off)
+            % ケース2: 差圧が微小で推力が重力を下回る場合
             cfg2 = wr.defaultConfig();
-            cfg2.pGauge = 500; % 0.5 kPa gauge -> tiny thrust
+            cfg2.pGauge = 500;
             cfg2.p0Abs = [];
             cfgSI2 = wr.validateConfig(cfg2);
             sim2 = wr.simulateRocket(0.35, alpha, cfgSI2);
@@ -119,7 +119,7 @@ classdef TestSimulation < matlab.unittest.TestCase
 
         function testMaxTimeTimeout(testCase)
             cfgSI = wr.validateConfig(wr.defaultConfig());
-            cfgSI.maxFlightTime = 0.05; % Too short to reach apex
+            cfgSI.maxFlightTime = 0.05;
             sim = wr.simulateRocket(0.35, 0.5 * ones(1, cfgSI.nControlKnots), cfgSI);
             testCase.verifyEqual(string(sim.status), "timeout");
         end

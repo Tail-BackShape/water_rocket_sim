@@ -1,16 +1,5 @@
 function figs = plotResults(result, cfgSI)
-%PLOTRESULTS Plot optimal vs constant-nozzle baseline water rocket trajectories.
-%   figs = wr.plotResults(result, cfgSI) generates an 8-panel overview figure
-%   comparing the optimal variable-nozzle schedule against the best constant-
-%   opening baseline in SI units:
-%     1. Effective nozzle area A(t) [m^2]
-%     2. Equivalent nozzle diameter dEq(t) [m]
-%     3. Altitude history z(t) [m]
-%     4. 2D flight trajectory z vs x [m]
-%     5. Tank absolute pressure p(t) [Pa]
-%     6. Thrust history F_T(t) [N]
-%     7. Remaining water volume Vw(t) [m^3]
-%     8. Velocity components vx(t), vz(t) [m/s]
+%PLOTRESULTS 最適解と一定開口基準の比較グラフ (8パネル・SI単位) を描画する
 
     if nargin < 2 || isempty(cfgSI)
         cfgSI = result.cfgSI;
@@ -37,7 +26,7 @@ function figs = plotResults(result, cfgSI)
     [ABestNoz, dEqBestNoz] = wr.openingAtTime(tNoz, result.best.alpha, cfgSI);
     [ABaseNoz, dEqBaseNoz] = wr.openingAtTime(tNoz, result.baseline.alpha, cfgSI);
 
-    % 1. Effective Nozzle Area A(t) [m^2]
+    % 1. 有効開口面積 A(t) [m^2]
     subplot(4, 2, 1, 'Parent', fig);
     hold on; grid on;
     plot(tNoz, ABaseNoz, '--', 'LineWidth', 1.4, 'DisplayName', 'Baseline (const)');
@@ -48,7 +37,7 @@ function figs = plotResults(result, cfgSI)
     title('Nozzle Effective Opening Area A(t)');
     legend('Location', 'best');
 
-    % 2. Equivalent Nozzle Diameter dEq(t) [m]
+    % 2. 等価ノズル直径 dEq(t) [m]
     subplot(4, 2, 2, 'Parent', fig);
     hold on; grid on;
     plot(tNoz, dEqBaseNoz, '--', 'LineWidth', 1.4, 'DisplayName', 'Baseline (const)');
@@ -59,7 +48,7 @@ function figs = plotResults(result, cfgSI)
     title('Nozzle Equivalent Diameter d_{eq}(t)');
     legend('Location', 'best');
 
-    % 3. Altitude z(t) [m]
+    % 3. 高度履歴 z(t) [m]
     subplot(4, 2, 3, 'Parent', fig);
     hold on; grid on;
     if ~isempty(sBase.t)
@@ -75,7 +64,7 @@ function figs = plotResults(result, cfgSI)
     title('Altitude History z(t)');
     legend('Location', 'southeast');
 
-    % 4. 2D Trajectory x(t) vs z(t) [m]
+    % 4. 2次元軌道 x(t) vs z(t) [m]
     subplot(4, 2, 4, 'Parent', fig);
     hold on; grid on;
     if ~isempty(sBase.x)
@@ -89,7 +78,7 @@ function figs = plotResults(result, cfgSI)
     title('2D Flight Trajectory (Ascent to Apex)');
     legend('Location', 'southeast');
 
-    % 5. Tank Absolute Pressure p(t) [Pa] (zoomed to propulsion window)
+    % 5. タンク絶対圧 p(t) [Pa]
     subplot(4, 2, 5, 'Parent', fig);
     hold on; grid on;
     if ~isempty(sBase.t)
@@ -105,7 +94,7 @@ function figs = plotResults(result, cfgSI)
     title('Tank Absolute Pressure (Propulsion Phase)');
     legend('Location', 'northeast');
 
-    % 6. Thrust F_T(t) [N] (zoomed to propulsion window)
+    % 6. 推力履歴 F_T(t) [N]
     subplot(4, 2, 6, 'Parent', fig);
     hold on; grid on;
     if ~isempty(sBase.t)
@@ -120,7 +109,7 @@ function figs = plotResults(result, cfgSI)
     title('Thrust History (Propulsion Phase)');
     legend('Location', 'northeast');
 
-    % 7. Remaining Water Volume Vw(t) [m^3] (zoomed to propulsion window)
+    % 7. 残存水体積 Vw(t) [m^3]
     subplot(4, 2, 7, 'Parent', fig);
     hold on; grid on;
     if ~isempty(sBase.t)
@@ -137,7 +126,7 @@ function figs = plotResults(result, cfgSI)
     title('Remaining Water Volume V_w(t)');
     legend('Location', 'northeast');
 
-    % 8. Velocity Components vx(t), vz(t) [m/s]
+    % 8. 速度成分 vx(t), vz(t) [m/s]
     subplot(4, 2, 8, 'Parent', fig);
     hold on; grid on;
     if ~isempty(sBase.t)

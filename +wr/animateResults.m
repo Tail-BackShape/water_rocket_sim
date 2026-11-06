@@ -1,13 +1,8 @@
 function fig = animateResults(result, cfgSI)
-%ANIMATERESULTS Animate 2D rocket trajectory and variable nozzle diameter.
-%   fig = wr.animateResults(result, cfgSI) opens a multi-panel figure and
-%   animates the optimal flight from launch to apex:
-%     - Left panel       : 2D trajectory (x vs z), rocket orientation, thrust
-%                          plume, and live flight telemetry.
-%     - Top-right panel  : Live cross-sectional view of the nozzle orifice
-%                          dEq(t) relative to [dMin, dMax] bounds.
-%     - Bottom-right panel: Time history of nozzle diameter dEq(t) [mm] with a
-%                          moving time cursor across the propulsion phase.
+%ANIMATERESULTS 2次元飛行軌道とノズル有効径の変化をアニメーション表示する
+%   左パネル  : 2D軌道 (x vs z)、推力プルーム、リアルタイム飛行状態表示
+%   右上パネル: ノズル開口断面 (dEq(t) と最小/最大径の比較)
+%   右下パネル: ノズル等価直径スケジュール dEq(t) と現在時刻カーソル
 
     if nargin < 2 || isempty(cfgSI)
         cfgSI = result.cfgSI;
@@ -38,7 +33,7 @@ function fig = animateResults(result, cfgSI)
         return;
     end
 
-    % --- Build two-stage animation timeline (slow-mo propulsion + coast) ---
+    % --- 推進フェーズ (スロー再生) と慣性飛行フェーズの2段階タイムライン作成 ---
     tEndAll = sBest.t(end);
     tPropWindow = min(max([cfgSI.tControlEnd, sBest.tPropulsionEnd, 0.05]), tEndAll);
 
@@ -46,7 +41,7 @@ function fig = animateResults(result, cfgSI)
         nFramesProp = 55;
         nFramesCoast = 45;
     else
-        % Fast verification in headless/unit-test mode
+        % テスト・バッチ実行時は最小フレーム数で高速検証
         nFramesProp = 4;
         nFramesCoast = 4;
     end
@@ -59,7 +54,7 @@ function fig = animateResults(result, cfgSI)
         tAnim = linspace(0.0, tEndAll, nFramesProp);
     end
 
-    % Interpolate trajectory states onto tAnim
+    % アニメーション時刻への状態補間
     xAnim = interp1(sBest.t, sBest.x, tAnim, 'linear', 'extrap');
     zAnim = interp1(sBest.t, sBest.z, tAnim, 'linear', 'extrap');
     vxAnim = interp1(sBest.t, sBest.vx, tAnim, 'linear', 'extrap');
@@ -77,7 +72,7 @@ function fig = animateResults(result, cfgSI)
     tAirEnd = result.phaseEvents.airEnd.t;
 
     % =========================================================================
-    % Panel 1 (Left): 2D Trajectory x(t) vs z(t)
+    % パネル 1 (左): 2次元軌道 x(t) vs z(t)
     % =========================================================================
     axTraj = subplot(2, 2, [1, 3], 'Parent', fig);
     hold(axTraj, 'on');
@@ -113,7 +108,7 @@ function fig = animateResults(result, cfgSI)
         'BackgroundColor', [0.97, 0.97, 0.97], 'EdgeColor', [0.8, 0.8, 0.8]);
 
     % =========================================================================
-    % Panel 2 (Top-Right): Live Nozzle Orifice Cross-Section View
+    % パネル 2 (右上): ノズル開口断面ビュー
     % =========================================================================
     axNozView = subplot(2, 2, 2, 'Parent', fig);
     hold(axNozView, 'on');
@@ -144,7 +139,7 @@ function fig = animateResults(result, cfgSI)
     legend(axNozView, 'Location', 'northeast');
 
     % =========================================================================
-    % Panel 3 (Bottom-Right): Nozzle Diameter Schedule dEq(t) [mm]
+    % パネル 3 (右下): ノズル等価直径スケジュール dEq(t) [mm]
     % =========================================================================
     axSched = subplot(2, 2, 4, 'Parent', fig);
     hold(axSched, 'on');
@@ -177,7 +172,7 @@ function fig = animateResults(result, cfgSI)
     legend(axSched, 'Location', 'best');
 
     % =========================================================================
-    % Animation Loop
+    % アニメーション更新ループ
     % =========================================================================
     plumeRefScale = 0.08 * maxZ / max(max(thrustAnim), 1.0);
 
@@ -198,7 +193,7 @@ function fig = animateResults(result, cfgSI)
         dEqk_mm = dEqAnim_mm(k);
         Ak = AAnim(k);
 
-        % Determine current phase label and color
+        % 現在の飛行フェーズと表示色の判定
         if isfinite(tWaterEnd) && tk <= tWaterEnd + 1e-6
             phaseLabel = 'Phase W (Water Jet)';
             nozColor = [0.15, 0.55, 0.95];
@@ -216,7 +211,7 @@ function fig = animateResults(result, cfgSI)
             speedTag = '[Real-time Coast]';
         end
 
-        % Update trajectory trail, rocket marker, and jet plume
+        % 軌跡・機体位置・推力プルームの更新
         set(hTrail, 'XData', xAnim(1:k), 'YData', zAnim(1:k));
         set(hRocket, 'XData', xk, 'YData', zk);
 
@@ -236,7 +231,7 @@ function fig = animateResults(result, cfgSI)
             set(hPlume, 'XData', [xk, xk], 'YData', [zk, zk]);
         end
 
-        % Update telemetry text box
+        % 状態テキストの更新
         infoStr = sprintf([ ...
             '%s\n', ...
             'Phase  : %s\n', ...
@@ -250,14 +245,14 @@ function fig = animateResults(result, cfgSI)
             max(pk - cfgSI.pAmb, 0.0) * 1e-3, Vwk * 1e3);
         set(hInfoText, 'String', infoStr);
 
-        % Update nozzle orifice cross-section
+        % ノズル断面円の更新
         rk = dEqk_mm / 2.0;
         set(hNozPatch, 'XData', rk * cos(thetaCircle), ...
                        'YData', rk * sin(thetaCircle), ...
                        'FaceColor', nozColor);
         set(hNozTitle, 'String', sprintf('Nozzle Orifice: d_{eq}(t) = %.2f mm (A = %.2e m^2)', dEqk_mm, Ak));
 
-        % Update schedule cursor (clamped to schedule plot window)
+        % スケジュール上の時刻カーソル更新
         tCurPlot = min(tk, tSchedPlotMax);
         set(hCursorLine, 'XData', [tCurPlot, tCurPlot]);
         set(hCursorDot, 'XData', tCurPlot, 'YData', dEqk_mm);

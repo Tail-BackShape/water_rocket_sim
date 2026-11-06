@@ -1,15 +1,11 @@
 function sim = simulateRocket(f, alpha, cfgSI)
-%SIMULATEROCKET Simulate multi-phase water rocket flight up to apex.
-%   sim = wr.simulateRocket(f, alpha, cfgSI) integrates the 2D point-mass
-%   equations of motion across Phase W (water propulsion), Phase A (air
-%   blowdown), and Phase C (coast) using ode45 with event detection.
-%
-%   Returns struct sim with status, Hmax, tApex, time histories, and
-%   phaseEvents diagnostics. Never returns raw NaN without diagnostic status.
+%SIMULATEROCKET 水噴射・空気噴射・慣性飛行の多フェーズ軌道を最高点まで積分する
+%   成功時は status="success" と最高到達高度 Hmax・時系列データを返し、
+%   飛行不能やタイムアウト時は対応する診断ステータスを返す (NaN単体は返さない)。
 
     sim = initEmptySim(f, alpha, cfgSI);
 
-    % --- 1. Validate candidate inputs f and alpha ---
+    % --- 1. 入力値 f, alpha の検証 ---
     if ~isnumeric(f) || ~isscalar(f) || ~isfinite(f) || f <= 0.0 || f >= 1.0
         sim.status = "invalidInput";
         sim.message = "Initial water fill fraction f must be a finite scalar in (0, 1).";
@@ -27,7 +23,7 @@ function sim = simulateRocket(f, alpha, cfgSI)
     end
     alphaRow = min(max(alpha(:).', 0.0), 1.0);
 
-    % --- 2. Check initial thermodynamic & liftoff feasibility ---
+    % --- 2. 初期圧力と離陸成立性の確認 ---
     if cfgSI.p0Abs <= cfgSI.pAmb
         sim.status = "noLiftoff";
         sim.message = "Initial tank pressure p0Abs does not exceed ambient pressure pAmb.";
@@ -47,14 +43,14 @@ function sim = simulateRocket(f, alpha, cfgSI)
         return;
     end
 
-    % --- 3. Configure ODE solver options ---
+    % --- 3. ODEソルバ設定 ---
     dtKnot = cfgSI.tControlEnd / max(cfgSI.nControlKnots - 1, 1);
     maxStepProp = min(cfgSI.maxStep, dtKnot / 4.0);
     maxStepCoast = cfgSI.maxStep;
 
     try
         % =====================================================================
-        % PHASE W: Water Propulsion
+        % PHASE W: 水噴射フェーズ
         % =====================================================================
         optsW = odeset( ...
             'RelTol', cfgSI.relTol, ...
@@ -62,11 +58,11 @@ function sim = simulateRocket(f, alpha, cfgSI)
             'MaxStep', maxStepProp, ...
             'Events', @(t, y) wr.rocketEvents(t, y, "water", alphaRow, cfgSI));
 
-        [tW, yW, teW, yeW, ieW] = ode45( ...
+        [tW, yW, teW, ~, ieW] = ode45( ...
             @(t, y) wr.rocketRHS(t, y, "water", alphaRow, cfgSI), ...
             [0.0, cfgSI.maxFlightTime], y0, optsW);
 
-        % Sanitize small numerical negative overshoots on Vw and ma
+        % 微小な負の丸め誤差をゼロに補正
         yW(:, 5) = max(yW(:, 5), 0.0);
         yW(:, 6) = max(yW(:, 6), 0.0);
 
@@ -79,13 +75,12 @@ function sim = simulateRocket(f, alpha, cfgSI)
         propEndW = wr.waterPropulsion(tEndW, yEndW, alphaRow, cfgSI);
         tPropEnd = tEndW;
 
-        % Determine why Phase W terminated
+        % Phase W 終了要因の判定 (残水・圧力条件を優先)
         ieWLast = getLastEventIndices(teW, ieW, tEndW);
         runPhaseA = false;
         runPhaseC = false;
 
-        % Priority 1: Propellant or pressure cutoff (if simultaneous with velocity/ground)
-        pCutTol = 2e-2; % Matches 1e-2 Pa event threshold in rocketEvents
+        pCutTol = 2e-2;
         waterEmpty = any(ieWLast == 1) || (yEndW(5) <= 1e-9 * cfgSI.Vb);
         pressureCutW = any(ieWLast == 2) || (propEndW.p <= cfgSI.pAmb + pCutTol);
         apexInW = any(ieWLast == 3) && (tEndW > 1e-6) && (yEndW(2) > 1e-5);
@@ -169,7 +164,6 @@ function sim = simulateRocket(f, alpha, cfgSI)
             end
 
         else
-            % Reached maxFlightTime in Phase W
             sim.phaseEvents.waterEnd = struct( ...
                 't', tEndW, ...
                 'reason', "timeout", ...
@@ -182,7 +176,7 @@ function sim = simulateRocket(f, alpha, cfgSI)
         end
 
         % =====================================================================
-        % PHASE A: Air Blowdown Propulsion
+        % PHASE A: 圧縮空気噴射フェーズ
         % =====================================================================
         tCurr = tEndW;
         yCurr = yEndW;
@@ -286,7 +280,7 @@ function sim = simulateRocket(f, alpha, cfgSI)
         end
 
         % =====================================================================
-        % PHASE C: Coasting Flight to Apex
+        % PHASE C: 慣性飛行フェーズ
         % =====================================================================
         if runPhaseC
             if tCurr >= cfgSI.maxFlightTime
@@ -338,7 +332,7 @@ function sim = simulateRocket(f, alpha, cfgSI)
             end
         end
 
-        % --- 4. Reconstruct full derived time histories ---
+        % --- 4. 全時刻の推力・圧力・開口面積履歴の再構築 ---
         sim = populateTrajectoryHistories(sim, tAll, yAll, phaseIdAll, alphaRow, cfgSI, phase0, tPropEnd);
 
     catch ME
@@ -417,7 +411,7 @@ function sim = populateTrajectoryHistories(sim, tAll, yAll, phaseIdAll, alphaRow
     thrustHist = zeros(nSteps, 1);
     [AHist, dEqHist] = wr.openingAtTime(tAll, alphaRow, cfgSI);
 
-    % Track final gas temperature at propulsion cutoff for coast phase record
+    % 慣性飛行フェーズ記録用に推進終了時点の温度を保持
     TCoast = cfgSI.T0;
 
     for k = 1:nSteps

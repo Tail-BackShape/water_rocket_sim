@@ -1,5 +1,5 @@
 classdef TestWaterPropulsion < matlab.unittest.TestCase
-    %TESTWATERPROPULSION Unit tests for wr.waterPropulsion (Phase W)
+    %TESTWATERPROPULSION wr.waterPropulsion (Phase W) の単体テスト
 
     methods (TestClassSetup)
         function addProjectRootToPath(testCase) %#ok<MANU>
@@ -57,7 +57,7 @@ classdef TestWaterPropulsion < matlab.unittest.TestCase
             ma0 = cfgSI.p0Abs * Va0 / (cfgSI.Rair * cfgSI.T0);
             y = [0; 0; 0; 0; Vw0; ma0];
 
-            % alpha1 gives A = 2.0e-5, alpha2 gives A = 4.0e-5 (exact 2x area)
+            % alpha1: A = 2.0e-5, alpha2: A = 4.0e-5 (面積2倍)
             alpha1 = 0.25 * ones(1, cfgSI.nControlKnots);
             alpha2 = 0.75 * ones(1, cfgSI.nControlKnots);
 
@@ -71,16 +71,15 @@ classdef TestWaterPropulsion < matlab.unittest.TestCase
 
         function testNoReverseFlow(testCase)
             cfg = wr.defaultConfig();
-            cfg.pGauge = 20000; % Small initial gauge pressure (20 kPa)
+            cfg.pGauge = 20000;
             cfg.p0Abs = [];
             cfgSI = wr.validateConfig(cfg);
 
-            % Start with high water fill so expansion reaches below ambient before emptying
+            % 高い初期水率から膨張させ、水が抜ける前に外気圧以下となる状態を作る
             Vw0 = 0.80 * cfgSI.Vb;
             Va0 = cfgSI.Vb - Vw0;
             ma0 = cfgSI.p0Abs * Va0 / (cfgSI.Rair * cfgSI.T0);
 
-            % Near empty water volume -> expanded pressure < pAmb
             yExpanded = [0; 5; 0; 10; 0.10 * cfgSI.Vb; ma0];
             alpha = 0.8 * ones(1, cfgSI.nControlKnots);
 

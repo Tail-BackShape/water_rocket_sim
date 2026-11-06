@@ -1,11 +1,8 @@
 function result = optimizeRocket(cfgSI)
-%OPTIMIZEROCKET Optimize initial water fill fraction and variable nozzle schedule.
-%   result = wr.optimizeRocket(cfgSI) performs:
-%     1. Preliminary constant-opening baseline grid search over (f, alpha_const).
-%     2. Multi-start constrained local optimization via fmincon (SQP) subject to
-%        fill bounds, opening bounds, and linear adjacent-knot slew constraints.
-%     3. Optional Global Optimization Toolbox (ga) search if cfgSI.useGA is true.
-%     4. Safe adoption rule guaranteeing result.best.Hmax >= result.baseline.Hmax.
+%OPTIMIZEROCKET 初期水充填率と可変ノズル開口スケジュールを最適化する
+%   1. 一定開口の基準ケース (Baseline) を格子探索で評価する。
+%   2. 上下限およびスルーレート線形制約下で fmincon (SQP法) による最適化を行う。
+%   3. 常に最良一定開口基準以上の実行可能解を最終解 (best) として採用する。
 
     cfgSI = wr.validateConfig(cfgSI);
 
@@ -16,7 +13,7 @@ function result = optimizeRocket(cfgSI)
              'are disabled per specification to guarantee strict constraint satisfaction.']);
     end
 
-    % Manage random seed for reproducibility without polluting caller RNG state
+    % 再現性のため乱数シードを設定し、終了時に元の状態を復元
     prevRng = rng;
     cleanupRng = onCleanup(@() rng(prevRng));
     if isfield(cfgSI, 'randomSeed') && ~isempty(cfgSI.randomSeed)
@@ -29,17 +26,16 @@ function result = optimizeRocket(cfgSI)
     deltaA = cfgSI.Amax - cfgSI.Amin;
     dAlphaMax = cfgSI.ARateMax * dt / deltaA;
 
-    % --- 1. Build variable bounds and linear slew-rate constraints ---
+    % --- 1. 決定変数の上下限と隣接ノット変化率の線形不等式制約 ---
     lb = [cfgSI.fillMin; zeros(N, 1)];
     ub = [cfgSI.fillMax; ones(N, 1)];
     [Aineq, bineq] = buildSlewConstraints(N, dAlphaMax);
 
-    % Evaluation counters and best-feasible tracker
     nOdeEval = 0;
     nOdeFail = 0;
     best = struct();
 
-    % --- 2. Preliminary Constant-Nozzle Baseline Search ---
+    % --- 2. 一定開口基準ケース (Baseline) の格子探索 ---
     fGrid = linspace(cfgSI.fillMin, cfgSI.fillMax, 5);
     if cfgSI.Amin > 0.0
         alphaConstGrid = [0.0, 0.25, 0.50, 0.75, 1.0];
@@ -72,18 +68,17 @@ function result = optimizeRocket(cfgSI)
     end
 
     if isempty(bestBaselineSim)
-        % Evaluate default midpoint if no grid point lifted off
+        % 全格子点が離陸不能な場合は中点を評価して保持
         [~, bestBaselineSim] = trackedEval(bestBaselineQ);
-        bestBaselineHmax = max(bestBaselineSim.Hmax, 0.0);
     end
 
     baseline = packCandidateStruct(bestBaselineQ, bestBaselineSim, tKnots, cfgSI);
     baseline.gridRecords = gridRecords;
 
-    % Initialize adopted best solution to the baseline (guarantees best >= baseline)
+    % 基準ケースを初期採用解として保持 (best.Hmax >= baseline.Hmax を保証)
     best = baseline;
 
-    % --- 3. Multi-Start Constrained Optimization with fmincon (SQP) ---
+    % --- 3. fmincon (SQP法) によるマルチスタート制約付き局所最適化 ---
     nMultiStart = 3;
     if isfield(cfgSI, 'nMultiStart') && ~isempty(cfgSI.nMultiStart)
         nMultiStart = max(1, round(cfgSI.nMultiStart));
@@ -128,11 +123,11 @@ function result = optimizeRocket(cfgSI)
                 end
             end
         catch
-            % Keep searching remaining starts; baseline remains safe fallback
+            % 個別初期値での失敗は無視し、残りの初期値と基準解を維持
         end
     end
 
-    % --- 4. Optional Global Optimization Toolbox (ga) Search ---
+    % --- 4. 任意の Global Optimization Toolbox (ga) による大域探索 ---
     if isfield(cfgSI, 'useGA') && cfgSI.useGA
         if exist('ga', 'file') == 2
             try
@@ -151,7 +146,7 @@ function result = optimizeRocket(cfgSI)
                     end
                 end
             catch
-                % Ignore optional GA error and retain best feasible solution
+                % 任意のGA失敗時は既存の最良実行可能解を維持
             end
         else
             warning('wr:gaUnavailable', ...
@@ -159,9 +154,8 @@ function result = optimizeRocket(cfgSI)
         end
     end
 
-    % --- 5. Assemble Final Result & Diagnostics ---
+    % --- 5. 最終結果と診断情報の構築 ---
     [maxViolNorm, maxSlewRate] = computeConstraintViolation(best.q, lb, ub, Aineq, bineq, tKnots, cfgSI);
-
     comparison = computeComparison(best.Hmax, baseline.Hmax);
 
     limitationsNote = [ ...
@@ -211,14 +205,14 @@ function result = optimizeRocket(cfgSI)
         'inputSummary', inputSummary, ...
         'cfgSI', cfgSI);
 
-    % --- Nested helper functions ---
+    % --- 内部ヘルパー関数 ---
     function [c, s] = trackedEval(qVec)
         nOdeEval = nOdeEval + 1;
         [c, s] = wr.evaluateCandidate(qVec, cfgSI);
         if string(s.status) ~= "success"
             nOdeFail = nOdeFail + 1;
         else
-            % Also check if any intermediate feasible evaluation beat `best`
+            % 探索途中の実行可能解が最良値を更新した場合も記録
             qRowCand = qVec(:).';
             [vNormCand, ~] = computeConstraintViolation(qRowCand, lb, ub, Aineq, bineq, tKnots, cfgSI);
             if vNormCand <= 1e-6 && isfield(best, 'Hmax') && s.Hmax > best.Hmax
@@ -233,9 +227,7 @@ function result = optimizeRocket(cfgSI)
 end
 
 function [Aineq, bineq] = buildSlewConstraints(N, dAlphaMax)
-    % For i = 1 .. N-1:
-    %   alpha_{i+1} - alpha_i <= dAlphaMax
-    %   alpha_i - alpha_{i+1} <= dAlphaMax
+    % 隣接ノット間の線形不等式制約: |alpha_{i+1} - alpha_i| <= dAlphaMax
     nConstraints = 2 * (N - 1);
     Aineq = zeros(nConstraints, N + 1);
     bineq = dAlphaMax * ones(nConstraints, 1);
@@ -258,7 +250,7 @@ function guesses = generateInitialGuesses(qBase, nStarts, lb, ub, dAlphaMax)
     guesses(1, :) = qBase(:).';
 
     if nStarts >= 2
-        % Start 2: Ramp from smaller opening to larger opening (thrust modulation)
+        % 第2初期値: 開度を徐々に広げるランプスケジュール
         alphaRampUp = zeros(1, N);
         alphaRampUp(1) = max(0.0, qBase(2) - 0.5 * dAlphaMax);
         for k = 2:N
@@ -268,7 +260,7 @@ function guesses = generateInitialGuesses(qBase, nStarts, lb, ub, dAlphaMax)
     end
 
     if nStarts >= 3
-        % Start 3: Ramp from larger opening to smaller opening
+        % 第3初期値: 開度を徐々に絞るランプスケジュール
         alphaRampDown = zeros(1, N);
         alphaRampDown(1) = min(1.0, qBase(2) + 0.5 * dAlphaMax);
         for k = 2:N
@@ -292,7 +284,7 @@ end
 function qFeas = projectToFeasible(qRow, lb, ub, dAlphaMax)
     qFeas = min(max(qRow(:).', lb(:).'), ub(:).');
     N = numel(qFeas) - 1;
-    % Forward-backward slew projection onto |alpha_{k+1} - alpha_k| <= dAlphaMax
+    % 隣接ノット差が dAlphaMax 以下になるよう順次射影
     for k = 2:N
         lo = max(0.0, qFeas(k) - dAlphaMax);
         hi = min(1.0, qFeas(k) + dAlphaMax);

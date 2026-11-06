@@ -1,5 +1,5 @@
 classdef TestDynamics < matlab.unittest.TestCase
-    %TESTDYNAMICS Unit tests for wr.rocketRHS (2D point-mass equations of motion)
+    %TESTDYNAMICS wr.rocketRHS (2次元質点運動方程式) の単体テスト
 
     methods (TestClassSetup)
         function addProjectRootToPath(testCase) %#ok<MANU>
@@ -40,7 +40,7 @@ classdef TestDynamics < matlab.unittest.TestCase
             Vw0 = 0.35 * cfgSI.Vb;
             Va0 = cfgSI.Vb - Vw0;
             ma0 = cfgSI.p0Abs * Va0 / (cfgSI.Rair * cfgSI.T0);
-            % Velocity at 45 degrees with magnitude > vEpsilon
+            % vEpsilon より十分大きい45度方向の速度
             vMag = 10.0 * cfgSI.vEpsilon;
             vx = vMag / sqrt(2);
             vz = vMag / sqrt(2);
@@ -110,7 +110,7 @@ classdef TestDynamics < matlab.unittest.TestCase
             dyLight = wr.rocketRHS(0.5, yLight, "coast", alpha, cfgSI);
             dyHeavy = wr.rocketRHS(0.5, yHeavy, "coast", alpha, cfgSI);
 
-            % Drag deceleration magnitude is smaller for heavier remaining mass
+            % 残存推進剤が多いほど抗力による減速度が小さいことを確認
             testCase.verifyLessThan(abs(dyHeavy(3)), abs(dyLight(3)));
         end
     end

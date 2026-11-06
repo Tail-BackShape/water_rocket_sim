@@ -1,5 +1,5 @@
 classdef TestAirPropulsion < matlab.unittest.TestCase
-    %TESTAIRPROPULSION Unit tests for wr.airPropulsion (Phase A)
+    %TESTAIRPROPULSION wr.airPropulsion (Phase A) の単体テスト
 
     methods (TestClassSetup)
         function addProjectRootToPath(testCase) %#ok<MANU>
@@ -11,7 +11,7 @@ classdef TestAirPropulsion < matlab.unittest.TestCase
     methods (Test)
         function testChokedFlowPositive(testCase)
             cfgSI = wr.validateConfig(wr.defaultConfig());
-            % Set p1 well above critical pressure: pAmb / p1 < rCrit (~0.5283)
+            % 臨界圧力比より十分高い内圧を設定 (pAmb / p1 < rCrit)
             phase0 = struct('p1', 3.0 * cfgSI.pAmb, 'T1', 260.0, 'ma1', 0.005);
             y = [0; 10; 0; 25; 0; phase0.ma1];
             alpha = 0.5 * ones(1, cfgSI.nControlKnots);
@@ -27,7 +27,7 @@ classdef TestAirPropulsion < matlab.unittest.TestCase
 
         function testUnchokedFlowPositive(testCase)
             cfgSI = wr.validateConfig(wr.defaultConfig());
-            % Set p1 moderately above ambient so rCrit < pAmb/p1 < 1
+            % 非チョーク領域の内圧を設定 (rCrit < pAmb / p1 < 1)
             phase0 = struct('p1', 1.3 * cfgSI.pAmb, 'T1', 250.0, 'ma1', 0.003);
             y = [0; 12; 0; 20; 0; phase0.ma1];
             alpha = 0.5 * ones(1, cfgSI.nControlKnots);
@@ -44,7 +44,7 @@ classdef TestAirPropulsion < matlab.unittest.TestCase
         function testNoFlowAtAmbient(testCase)
             cfgSI = wr.validateConfig(wr.defaultConfig());
             phase0 = struct('p1', 1.5 * cfgSI.pAmb, 'T1', 260.0, 'ma1', 0.004);
-            % Choose ma such that p == pAmb
+            % p == pAmb となる空気質量
             maAmb = phase0.ma1 * (cfgSI.pAmb / phase0.p1)^(1.0 / cfgSI.gamma);
             yAmb = [0; 15; 0; 15; 0; maAmb];
             alpha = 0.5 * ones(1, cfgSI.nControlKnots);
@@ -54,7 +54,7 @@ classdef TestAirPropulsion < matlab.unittest.TestCase
             testCase.verifyEqual(propAmb.dMa, 0.0, 'AbsTol', 1e-15);
             testCase.verifyEqual(propAmb.thrust, 0.0, 'AbsTol', 1e-15);
 
-            % Also verify slightly below ambient produces zero reverse flow
+            % 外気圧未満でも逆流しないことを確認
             ySub = [0; 15; 0; 15; 0; 0.95 * maAmb];
             propSub = wr.airPropulsion(0.25, ySub, alpha, cfgSI, phase0);
             testCase.verifyEqual(propSub.mDotOut, 0.0, 'AbsTol', 1e-15);

@@ -1,8 +1,6 @@
 function dy = rocketRHS(t, y, phase, alpha, cfgSI, phase0)
-%ROCKETRHS Right-hand side of 2D point-mass equations of motion for water rocket.
-%   dy = wr.rocketRHS(t, y, phase, alpha, cfgSI, phase0) computes the time
-%   derivative dy = [vx; vz; ax; az; dVw; dMa] for state vector
-%   y = [x; z; vx; vz; Vw; ma] in phase "water", "air", or "coast".
+%ROCKETRHS 2次元質点モデルの状態微分 dy = [vx; vz; ax; az; dVw; dMa] を返す
+%   フェーズ "water", "air", "coast" に応じた推力と空気抗力・重力を合算する。
 
     vx = y(3);
     vz = y(4);
@@ -28,10 +26,10 @@ function dy = rocketRHS(t, y, phase, alpha, cfgSI, phase0)
             error('wr:invalidPhase', 'Unknown flight phase "%s".', char(phase));
     end
 
-    % Total instantaneous mass
+    % 瞬時総質量
     mTot = cfgSI.mDry + cfgSI.rhoW * Vw + ma;
 
-    % Velocity magnitude and thrust direction
+    % 速度大きさと推力単位ベクトル
     vMag = hypot(vx, vz);
     if vMag < cfgSI.vEpsilon
         eTx = cos(cfgSI.theta0);
@@ -41,13 +39,13 @@ function dy = rocketRHS(t, y, phase, alpha, cfgSI, phase0)
         eTz = vz / vMag;
     end
 
-    % Aerodynamic drag force components
+    % 空気抗力成分
     S = pi * (cfgSI.D ^ 2) / 4.0;
     dragCoeff = 0.5 * cfgSI.rhoAir * cfgSI.Cd * S * vMag;
     dragX = -dragCoeff * vx;
     dragZ = -dragCoeff * vz;
 
-    % Accelerations
+    % 並進加速度
     ax = (thrust * eTx + dragX) / mTot;
     az = (thrust * eTz + dragZ) / mTot - cfgSI.g;
 
