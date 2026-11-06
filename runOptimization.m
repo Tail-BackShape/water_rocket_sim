@@ -76,6 +76,9 @@ function [result, figs] = runOptimization(cfg)
     result = wr.optimizeRocket(cfgSI);
     figs = wr.plotResults(result, cfgSI);
 
+    % --- アニメーション表示 (オン/オフは下記のコメントアウトで切り替え) ---
+    figs.animation = wr.animateResults(result, cfgSI);
+
     printSummaryReport(result, cfgSI);
 end
 

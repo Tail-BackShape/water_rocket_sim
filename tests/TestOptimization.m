@@ -152,6 +152,11 @@ classdef TestOptimization < matlab.unittest.TestCase
             testCase.verifyTrue(isgraphics(figs.overview, 'figure'));
             axList = findall(figs.overview, 'Type', 'axes');
             testCase.verifyGreaterThanOrEqual(numel(axList), 6);
+
+            testCase.verifyTrue(isfield(figs, 'animation'));
+            testCase.verifyTrue(isgraphics(figs.animation, 'figure'));
+            axAnim = findall(figs.animation, 'Type', 'axes');
+            testCase.verifyGreaterThanOrEqual(numel(axAnim), 3);
         end
     end
 end
