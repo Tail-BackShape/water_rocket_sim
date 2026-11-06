@@ -1,17 +1,78 @@
 function [result, figs] = runOptimization(cfg)
 %RUNOPTIMIZATION Validate configuration, run water rocket optimization, and plot.
-%   [result, figs] = runOptimization() uses the demo configuration from
-%   wr.defaultConfig(), runs constrained optimization of initial water fill
-%   fraction and variable nozzle schedule, prints a structured summary report,
-%   and generates verification plots.
+%   [result, figs] = runOptimization() uses the constants and coefficients
+%   defined in the configuration section below, runs constrained optimization
+%   of initial water fill fraction and variable nozzle schedule, prints a
+%   structured summary report, and generates verification plots.
 %
-%   [result, figs] = runOptimization(cfg) runs with a user-supplied cfg struct.
+%   [result, figs] = runOptimization(cfg) overrides the settings below with
+%   any fields provided in the struct cfg.
 
-    if nargin < 1 || isempty(cfg)
-        cfg = wr.defaultConfig();
+    % =========================================================================
+    %  定数・係数・機体パラメータ設定 (Constants, Coefficients & Parameters)
+    % =========================================================================
+    userCfg = wr.defaultConfig();
+    userCfg.isDemo = true;                    % デモ設定フラグ (実機値入力時は false)
+
+    % --- 1. 機体諸元 (Rocket Geometry & Mass) ---
+    userCfg.Vb     = 1.5 * 1e-3;              % タンク内容積 [m^3] (1.5 L = 1.5e-3 m^3)
+    userCfg.mDry   = 0.250;                   % 乾燥機体質量 (ノズル機構・電装含む) [kg]
+    userCfg.D      = 90.0 * 1e-3;             % 胴体の空力基準直径 [m] (90 mm = 0.090 m)
+
+    % --- 2. 発射条件・初期内部状態 (Launch & Initial Thermodynamic State) ---
+    userCfg.pAmb   = 101325.0;                % 外気絶対圧 [Pa]
+    userCfg.pGauge = 400.0 * 1e3;             % 初期タンクゲージ圧 [Pa] (400 kPaG = 400e3 Pa)
+    userCfg.p0Abs  = [];                      % 初期タンク絶対圧 [Pa] (空なら pAmb + pGauge で自動計算)
+    userCfg.theta0 = deg2rad(85.0);           % 発射角 [rad] (水平=0, 鉛直上向き=90 deg)
+    userCfg.T0     = 293.15;                  % 初期タンク空気温度 [K] (20 degC = 293.15 K)
+
+    % --- 3. 物理定数・環境・空力係数 (Physical Constants & Aerodynamic Coeffs) ---
+    userCfg.Cd     = 0.45;                    % 機体の抗力係数 [-]
+    userCfg.rhoAir = 1.204;                   % 外気密度 [kg/m^3]
+    userCfg.rhoW   = 998.2;                   % 水の密度 [kg/m^3]
+    userCfg.gamma  = 1.4;                     % 空気の比熱比 [-]
+    userCfg.Rair   = 287.05;                  % 空気の比気体定数 [J/(kg*K)]
+    userCfg.g      = 9.80665;                 % 重力加速度 [m/s^2]
+
+    % --- 4. 可変ノズル機構パラメータ (Variable Nozzle Bounds & Slew Rate) ---
+    dMin_m           = 5.0 * 1e-3;            % 最小等価ノズル直径 [m] (5 mm)
+    dMax_m           = 15.0 * 1e-3;           % 最大等価ノズル直径 [m] (15 mm)
+    userCfg.Amin     = pi * (dMin_m / 2)^2;   % 最小有効開口面積 [m^2]
+    userCfg.Amax     = pi * (dMax_m / 2)^2;   % 最大有効開口面積 [m^2]
+    userCfg.ARateMax = 1.2e-3;                % 有効開口面積の最大変化速度 [m^2/s]
+
+    % --- 5. 最適制御スケジュール設定 (Control Parameterization) ---
+    userCfg.tControlEnd   = 0.30;             % 制御点の末尾時刻 [s]
+    userCfg.nControlKnots = 6;                % 制御ノット点数 [-]
+    userCfg.fillMin       = 0.10;             % 初期水充填率 f = Vw0/Vb の下限 [-]
+    userCfg.fillMax       = 0.65;             % 初期水充填率 f = Vw0/Vb の上限 [-]
+
+    % --- 6. 数値積分・最適化ソルバ設定 (Numerical & Optimizer Settings) ---
+    userCfg.vEpsilon      = 0.20;             % 推力方向を速度方向へ切り替える速度閾値 [m/s]
+    userCfg.relTol        = 1e-6;             % ODE 相対許容誤差 (RelTol) [-]
+    userCfg.absTol        = 1e-8;             % ODE 絶対許容誤差 (AbsTol) [-]
+    userCfg.maxStep       = 0.01;             % ODE 最大ステップ幅 (MaxStep) [s]
+    userCfg.maxFlightTime = 15.0;             % 最大飛行積分時間 (タイムアウト上限) [s]
+    userCfg.randomSeed    = 42;               % 再現用乱数シード
+    userCfg.nMultiStart   = 3;                % マルチスタート初期値数 [-]
+    userCfg.maxIter       = 40;               % fmincon 最大反復回数 [-]
+    userCfg.useGA         = false;            % Global Optimization Toolbox (ga) 併用フラグ
+    userCfg.showPlots     = true;             % 結果プロット表示フラグ
+    % =========================================================================
+
+    % 引数 cfg が渡された場合はそのフィールドで上書き
+    if nargin >= 1 && ~isempty(cfg)
+        if ~isstruct(cfg) || numel(cfg) ~= 1
+            error('wr:invalidConfig', 'Input cfg must be a scalar struct.');
+        end
+        overrideFields = fieldnames(cfg);
+        for i = 1:numel(overrideFields)
+            fn = overrideFields{i};
+            userCfg.(fn) = cfg.(fn);
+        end
     end
 
-    cfgSI = wr.validateConfig(cfg);
+    cfgSI = wr.validateConfig(userCfg);
     result = wr.optimizeRocket(cfgSI);
     figs = wr.plotResults(result, cfgSI);
 
@@ -32,6 +93,7 @@ function printSummaryReport(result, cfgSI)
         cfgSI.pGauge * 1e-3, cfgSI.p0Abs * 1e-3);
     fprintf('  Launch angle theta0   : %.1f deg (%.4f rad)\n', ...
         rad2deg(cfgSI.theta0), cfgSI.theta0);
+    fprintf('  Drag coeff Cd         : %.3f [-]\n', cfgSI.Cd);
     fprintf('  Nozzle area bounds    : [%.3e, %.3e] m^2 (dEq: [%.2f, %.2f] mm)\n', ...
         cfgSI.Amin, cfgSI.Amax, ...
         sqrt(4 * cfgSI.Amin / pi) * 1e3, sqrt(4 * cfgSI.Amax / pi) * 1e3);
