@@ -87,6 +87,84 @@ classdef TestOptimization < matlab.unittest.TestCase
             testCase.verifyEqual(res1.best.Hmax, res2.best.Hmax, 'AbsTol', 1e-9);
             testCase.verifyEqual(res1.best.q, res2.best.q, 'AbsTol', 1e-9);
         end
+
+        function testResultContainsPhaseEvents(testCase)
+            cfg = fastOptConfig();
+            cfgSI = wr.validateConfig(cfg);
+            res = wr.optimizeRocket(cfgSI);
+
+            testCase.verifyTrue(isfield(res, 'phaseEvents'));
+            testCase.verifyTrue(isfield(res.phaseEvents, 'waterEnd'));
+            testCase.verifyTrue(isfield(res.phaseEvents, 'airEnd'));
+            testCase.verifyTrue(isfield(res.phaseEvents, 'apex'));
+            testCase.verifyTrue(isfinite(res.phaseEvents.waterEnd.t));
+            testCase.verifyTrue(isfinite(res.phaseEvents.apex.t));
+            testCase.verifyNotEqual(string(res.phaseEvents.waterEnd.reason), "none");
+        end
+
+        function testReportHasConstraintViolation(testCase)
+            cfg = fastOptConfig();
+            cfgSI = wr.validateConfig(cfg);
+            res = wr.optimizeRocket(cfgSI);
+
+            testCase.verifyTrue(isfield(res, 'diagnostics'));
+            testCase.verifyTrue(isfield(res.diagnostics, 'maxConstraintViolation'));
+            testCase.verifyTrue(isfinite(res.diagnostics.maxConstraintViolation));
+            testCase.verifyLessThanOrEqual(res.diagnostics.maxConstraintViolation, 1e-6);
+            testCase.verifyTrue(isfield(res.diagnostics, 'limitationsNote'));
+            testCase.verifyNotEmpty(res.diagnostics.limitationsNote);
+        end
+
+        function testBaselineComparisonFinite(testCase)
+            cfg = fastOptConfig();
+            cfgSI = wr.validateConfig(cfg);
+            res = wr.optimizeRocket(cfgSI);
+
+            testCase.verifyTrue(isfield(res, 'comparison'));
+            testCase.verifyTrue(isfinite(res.comparison.bestHmax));
+            testCase.verifyTrue(isfinite(res.comparison.baselineHmax));
+            testCase.verifyTrue(isfinite(res.comparison.improvementAbs));
+            testCase.verifyTrue(isfinite(res.comparison.improvementPct));
+            testCase.verifyGreaterThanOrEqual(res.comparison.improvementAbs, -1e-12);
+        end
+
+        function testNoPercentWhenBaselineZero(testCase)
+            cfg = fastOptConfig();
+            cfg.pGauge = 200; % Too low to lift off -> baseline Hmax == 0
+            cfg.p0Abs = [];
+            cfgSI = wr.validateConfig(cfg);
+            res = wr.optimizeRocket(cfgSI);
+
+            testCase.verifyEqual(res.baseline.Hmax, 0.0, 'AbsTol', 1e-12);
+            testCase.verifyTrue(isnan(res.comparison.improvementPct));
+            testCase.verifyFalse(isinf(res.comparison.improvementPct));
+        end
+
+        function testPlotResultsAndEntryPoint(testCase)
+            cfg = fastOptConfig();
+            cfg.showPlots = false;
+            [res, figs] = runOptimization(cfg);
+            cleanupFigs = onCleanup(@() closeAllValidFigs(figs));
+
+            testCase.verifyEqual(string(res.best.sim.status), "success");
+            testCase.verifyTrue(isstruct(figs));
+            testCase.verifyTrue(isfield(figs, 'overview'));
+            testCase.verifyTrue(isgraphics(figs.overview, 'figure'));
+            axList = findall(figs.overview, 'Type', 'axes');
+            testCase.verifyGreaterThanOrEqual(numel(axList), 6);
+        end
+    end
+end
+
+function closeAllValidFigs(figs)
+    if isstruct(figs)
+        fNames = fieldnames(figs);
+        for k = 1:numel(fNames)
+            h = figs.(fNames{k});
+            if ~isempty(h) && all(isgraphics(h))
+                close(h);
+            end
+        end
     end
 end
 
